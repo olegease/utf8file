@@ -15,12 +15,24 @@
 #define EXPECT_CONTINUATION_CHUNK 3
 
 typedef unsigned char BufferElement;
-typedef int (*expectFunction) (BufferElement c, int* cnt, int* beg, int* end);
+typedef struct expectArgs ExpectArgs;
+typedef int (*expectFunction) (ExpectArgs args);
 
-int expectError(BufferElement c, int* cnt, int* beg, int* end);
-int expectDefault(BufferElement c, int* cnt, int* beg, int* end);
-int expectContinuation(BufferElement c, int* cnt, int* beg, int* end);
-int expectContinuationChunk(BufferElement c, int* cnt, int* beg, int* end);
+struct expectArgs {
+    int* cnt;
+    int* beg;
+    int* end;
+    BufferElement c;
+};
+
+
+
+
+
+int expectError(ExpectArgs args);
+int expectDefault(ExpectArgs args);
+int expectContinuation(ExpectArgs args);
+int expectContinuationChunk(ExpectArgs args);
 
 expectFunction Expects[] = {
     expectError,
@@ -57,7 +69,8 @@ int main(int argc, char *argv[])
 
     char **fileArgs = argv;
     FILE *f = NULL;
-    int next = EXPECT_DEFAULT, cnt = 0, beg = 0, end = 0;
+    int next = EXPECT_DEFAULT;
+    ExpectArgs eArgs;
     while (*++fileArgs != NULL) {
         char *fileName = *fileArgs;
         printf("Start processing file: %s\n", fileName);
@@ -71,8 +84,9 @@ int main(int argc, char *argv[])
         size_t rSize = BUFFER_LAST;
         while (rSize == BUFFER_LAST) {
             rSize = fread(Buffer, sizeof(BufferElement), BUFFER_LAST, f);
-            int i = 0;
-            while ((next = Expects[next](Buffer[i], &cnt, &beg, &end)) && ++i != rSize) {}
+            size_t i = 0;
+            eArgs.c = Buffer[i];
+            while ((next = Expects[next](eArgs)) && ++i != rSize) {}
             if (next == EXPECT_ERROR) break;
         }
 
@@ -92,54 +106,55 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-int expectError(BufferElement c, int* cnt, int* beg, int* end)
+int expectError(ExpectArgs args)
 {
+    *args.beg = *args.end = *args.cnt = 0;
     return EXPECT_DEFAULT;
 }
-int expectDefault(BufferElement c, int* cnt, int* beg, int* end)
+int expectDefault(ExpectArgs args)
 {
-    if (c <= 0x7F) return EXPECT_DEFAULT;
-    if (c >= 0xC2 && c <= 0xDF) {
-        *cnt = 1;
+    if (args.c <= 0x7F) return EXPECT_DEFAULT;
+    if (args.c >= 0xC2 && args.c <= 0xDF) {
+        *args.cnt = 1;
         return EXPECT_CONTINUATION;
     }
-    if (c >= 0xE1 && c <= 0xEF && c != 0xED) {
-        *cnt = 2;
+    if (args.c >= 0xE1 && args.c <= 0xEF && args.c != 0xED) {
+        *args.cnt = 2;
         return EXPECT_CONTINUATION;
     }
-    if (c >= 0xF1 && c <= 0xF3) {
-        *cnt = 3;
+    if (args.c >= 0xF1 && args.c <= 0xF3) {
+        *args.cnt = 3;
         return EXPECT_CONTINUATION;
     }
-    switch (c) {
+    switch (args.c) {
         case 0xE0: {
-            *cnt = 1; *beg = 0xA0; *end = 0xBF;
+            *args.cnt = 1; *args.beg = 0xA0; *args.end = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xED: {
-            *cnt = 1; *beg = 0x80; *end = 0x9F;
+            *args.cnt = 1; *args.beg = 0x80; *args.end = 0x9F;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xF0: {
-            *cnt = 2; *beg = 0x90; *end = 0xBF;
+            *args.cnt = 2; *args.beg = 0x90; *args.end = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xF4: {
-            *cnt = 2; *beg = 0x90; *end = 0xBF;
+            *args.cnt = 2; *args.beg = 0x90; *args.end = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         default: return EXPECT_ERROR;
     }
 }
-int expectContinuation(BufferElement c, int* cnt, int* beg, int* end)
+int expectContinuation(ExpectArgs args)
 {
-    if (c >= 0x80 && c <= 0xBF) {
-        *cnt -= 1;
-        return *cnt ? EXPECT_CONTINUATION : EXPECT_DEFAULT;
+    if (args.c >= 0x80 && args.c <= 0xBF) {
+        *args.cnt -= 1;
+        return *args.cnt ? EXPECT_CONTINUATION : EXPECT_DEFAULT;
     }
     return EXPECT_ERROR;
 }
-int expectContinuationChunk(BufferElement c, int* cnt, int* beg, int* end)
+int expectContinuationChunk(ExpectArgs args)
 {
-    return (c >= *beg && c <= *end) ? EXPECT_CONTINUATION : EXPECT_ERROR;
+    return (args.c >= *args.beg && args.c <= *args.end) ? EXPECT_CONTINUATION : EXPECT_ERROR;
 }
