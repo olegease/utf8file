@@ -86,7 +86,9 @@ int main(int argc, char *argv[])
             rSize = fread(Buffer, sizeof(BufferElement), BUFFER_LAST, f);
             size_t i = 0;
             eArgs.c = Buffer[i];
-            while ((next = Expects[next](eArgs)) && ++i != rSize) {}
+            while ((next = Expects[next](eArgs)) && ++i != rSize) {
+                eArgs.c = Buffer[i];
+            }
             if (next == EXPECT_ERROR) break;
         }
 
@@ -108,7 +110,7 @@ int main(int argc, char *argv[])
 
 int expectError(ExpectArgs args)
 {
-    *args.beg = *args.end = *args.cnt = 0;
+    *args.cnt = 0;
     return EXPECT_DEFAULT;
 }
 int expectDefault(ExpectArgs args)
