@@ -16,23 +16,18 @@
 
 typedef unsigned char BufferElement;
 typedef struct expectArgs ExpectArgs;
-typedef int (*expectFunction) (ExpectArgs args);
+typedef int (*expectFunction) (BufferElement c, ExpectArgs *cbe);
 
 struct expectArgs {
-    int* cnt;
-    int* beg;
-    int* end;
-    BufferElement c;
+    int c;
+    int b;
+    int e;
 };
 
-
-
-
-
-int expectError(ExpectArgs args);
-int expectDefault(ExpectArgs args);
-int expectContinuation(ExpectArgs args);
-int expectContinuationChunk(ExpectArgs args);
+int expectError(BufferElement c, ExpectArgs *cbe);
+int expectDefault(BufferElement c, ExpectArgs *cbe);
+int expectContinuation(BufferElement c, ExpectArgs *cbe);
+int expectContinuationChunk(BufferElement c, ExpectArgs *cbe);
 
 expectFunction Expects[] = {
     expectError,
@@ -85,10 +80,7 @@ int main(int argc, char *argv[])
         while (rSize == BUFFER_LAST) {
             rSize = fread(Buffer, sizeof(BufferElement), BUFFER_LAST, f);
             size_t i = 0;
-            eArgs.c = Buffer[i];
-            while ((next = Expects[next](eArgs)) && ++i != rSize) {
-                eArgs.c = Buffer[i];
-            }
+            while ((next = Expects[next](Buffer[i], &eArgs)) && ++i != rSize) {}
             if (next == EXPECT_ERROR) break;
         }
 
@@ -108,55 +100,54 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-int expectError(ExpectArgs args)
+int expectError(BufferElement c, ExpectArgs *cbe)
 {
-    *args.cnt = 0;
     return EXPECT_DEFAULT;
 }
-int expectDefault(ExpectArgs args)
+int expectDefault(BufferElement c, ExpectArgs *cbe)
 {
-    if (args.c <= 0x7F) return EXPECT_DEFAULT;
-    if (args.c >= 0xC2 && args.c <= 0xDF) {
-        *args.cnt = 1;
+    if (c <= 0x7F) return EXPECT_DEFAULT;
+    if (c >= 0xC2 && c <= 0xDF) {
+        cbe->c = 1;
         return EXPECT_CONTINUATION;
     }
-    if (args.c >= 0xE1 && args.c <= 0xEF && args.c != 0xED) {
-        *args.cnt = 2;
+    if (c >= 0xE1 && c <= 0xEF && c != 0xED) {
+        cbe->c = 2;
         return EXPECT_CONTINUATION;
     }
-    if (args.c >= 0xF1 && args.c <= 0xF3) {
-        *args.cnt = 3;
+    if (c >= 0xF1 && c <= 0xF3) {
+        cbe->c = 3;
         return EXPECT_CONTINUATION;
     }
-    switch (args.c) {
+    switch (c) {
         case 0xE0: {
-            *args.cnt = 1; *args.beg = 0xA0; *args.end = 0xBF;
+            cbe->c = 1; cbe->b = 0xA0; cbe->e = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xED: {
-            *args.cnt = 1; *args.beg = 0x80; *args.end = 0x9F;
+            cbe->c = 1; cbe->b = 0x80; cbe->e = 0x9F;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xF0: {
-            *args.cnt = 2; *args.beg = 0x90; *args.end = 0xBF;
+            cbe->c = 2; cbe->b = 0x90; cbe->e = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xF4: {
-            *args.cnt = 2; *args.beg = 0x90; *args.end = 0xBF;
+            cbe->c = 2; cbe->b = 0x90; cbe->e = 0xBF;
             return EXPECT_CONTINUATION_CHUNK;
         }
         default: return EXPECT_ERROR;
     }
 }
-int expectContinuation(ExpectArgs args)
+int expectContinuation(BufferElement c, ExpectArgs *cbe)
 {
-    if (args.c >= 0x80 && args.c <= 0xBF) {
-        *args.cnt -= 1;
-        return *args.cnt ? EXPECT_CONTINUATION : EXPECT_DEFAULT;
+    if (c >= 0x80 && c <= 0xBF) {
+        cbe->c -= 1;
+        return cbe->c ? EXPECT_CONTINUATION : EXPECT_DEFAULT;
     }
     return EXPECT_ERROR;
 }
-int expectContinuationChunk(ExpectArgs args)
+int expectContinuationChunk(BufferElement c, ExpectArgs *cbe)
 {
-    return (args.c >= *args.beg && args.c <= *args.end) ? EXPECT_CONTINUATION : EXPECT_ERROR;
+    return (c >= cbe->b && c <= cbe->e) ? EXPECT_CONTINUATION : EXPECT_ERROR;
 }
