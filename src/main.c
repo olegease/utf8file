@@ -133,7 +133,7 @@ int expectDefault(BufferElement c, ExpectArgs *cbe)
             return EXPECT_CONTINUATION_CHUNK;
         }
         case 0xF4: {
-            cbe->c = 2; cbe->b = 0x90; cbe->e = 0xBF;
+            cbe->c = 2; cbe->b = 0x80; cbe->e = 0x8F;
             return EXPECT_CONTINUATION_CHUNK;
         }
         default: return EXPECT_ERROR;
