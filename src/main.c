@@ -76,22 +76,26 @@ int main(int argc, char *argv[])
             continue;
         }
 
+        size_t codePointsLen = 0;
         size_t rSize = BUFFER_LAST;
         while (rSize == BUFFER_LAST) {
             rSize = fread(Buffer, sizeof(BufferElement), BUFFER_LAST, f);
             size_t i = 0;
-            while ((next = Expects[next](Buffer[i], &eArgs)) && ++i != rSize) {}
-            if (next == EXPECT_ERROR) break;
+            while (i != rSize) {
+                next = Expects[next](Buffer[i++], &eArgs);
+                if (next == EXPECT_ERROR) goto gotoprint;
+                else if (next == EXPECT_DEFAULT) codePointsLen++;
+            }
         }
-
+        gotoprint:
         if (next != EXPECT_DEFAULT) {
-            printf("Error not UTF-8 file: %s\n", fileName);
+            printf("Error not UTF-8 file\n");
         } else if (feof(f)) {
-            printf("Success UTF-8 properly encoded file: %s\n", fileName);
+            printf("Success UTF-8 properly encoded, len: %lu\n",codePointsLen);
         } else if (ferror(f)) {
-            printf("Failed to read file: %s\n", fileName);
+            printf("Failed to read file\n");
         } else {
-            printf("Cannot reach end of file: %s\n", fileName);
+            printf("Cannot reach end of file\n");
         }
 
         fclose(f);
